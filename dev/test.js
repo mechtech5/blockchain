@@ -2,6 +2,7 @@ import { Blockchain } from "./blockchain.js";
 
 const bitcoin = new Blockchain();
 
-bitcoin.createNewBlock(100, "HASH", "HASH");
+bitcoin.createNewTransaction(10, "ALEX", "JACK");
+bitcoin.createNewBlock(101, "HASH", "HASH");
 
 console.log(bitcoin);
