@@ -2,7 +2,23 @@ import { Blockchain } from "./blockchain.js";
 
 const bitcoin = new Blockchain();
 
-bitcoin.createNewTransaction(10, "ALEX", "JACK");
-bitcoin.createNewBlock(101, "HASH", "HASH");
+const previousBlockHash = "aeaa";
+const currentBlockData = [
+    {
+        amount: 100,
+        sender: "a",
+        recipient: "b",
+    },
+    {
+        amount: 100,
+        sender: "b",
+        recipient: "a",
+    },
+    {
+        amount: 100,
+        sender: "a",
+        recipient: "b",
+    },
+]
 
-console.log(bitcoin);
+console.log(bitcoin.proofOfWork(previousBlockHash, currentBlockData));

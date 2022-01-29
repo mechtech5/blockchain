@@ -1,9 +1,15 @@
 import sha256 from "sha256";
 
+const currentNodeURL = process.argv[3] || "http://localhost";
+
 export class Blockchain {
   constructor() {
     this.chain = [];
     this.pendingTransactions = [];
+    this.currentNodeURL = currentNodeURL;
+    this.networkNodes = [];
+
+    this.createNewBlock(0, "0", "0"); // Genesis block
   }
 
   createNewBlock(nonce, previousBlockHash, hash) {
@@ -35,16 +41,25 @@ export class Blockchain {
 
     this.pendingTransactions.push(newTransaction);
 
-		const lastBlock = this.getLastBlock();
-    if (lastBlock) {
-      return lastBlock.index + 1;
-    }
-    return null;
+    const lastBlock = this.getLastBlock();
+
+    return lastBlock.index + 1;
   }
 
   hashBlock(previousBlockHash, currentBlockData, nonce) {
-    const dataAsString = previousBlockHash + JSON.stringify(currentBlockData) + nonce.toString();
+    const dataAsString =
+      previousBlockHash + JSON.stringify(currentBlockData) + nonce.toString();
     const hash = sha256(dataAsString);
     return hash;
+  }
+
+  proofOfWork(previousBlockHash, currentBlockData) {
+    let nonce = 0;
+    let hash = this.hashBlock(previousBlockHash, currentBlockData, nonce);
+    while (hash.substring(0, 4) !== "0000") {
+      nonce++;
+      hash = this.hashBlock(previousBlockHash, currentBlockData, nonce);
+    }
+    return nonce;
   }
 }
