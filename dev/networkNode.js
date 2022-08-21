@@ -1,9 +1,8 @@
 import express from "express";
 import bodyParser from "body-parser";
 import { v4 as uuidv4 } from "uuid";
-import rp from "request-promise";
-
 import { Blockchain } from "./blockchain.js";
+import rp from "request-promise";
 
 const nodeAddress = uuidv4().split("-").join("");
 const PORT = process.argv[2] || 3001;
@@ -19,10 +18,31 @@ app.get("/blockchain", (req, res) => {
 
 // Create a new transaction
 app.post("/transaction", (req, res) => {
-    const { amount, sender, recipient } = req.body;
-    const blockIndex = bc.createNewTransaction(amount, sender, recipient);
-    return res.send(`Transaction will be added to Block ${blockIndex}`);
+    const { newTransaction } = req.body;
+    const blockIndex = this.addToPendingTransactions(newTransaction);
+    res.json({ note: `Transaction will be added in block ${blockIndex}.` });
 });
+
+app.post('/transaction/broadcast', (req, res) => {
+    const { amount, sender, recipient } = req.body;
+    const newTransaction = bc.createNewTransaction(amount, sender, recipient);
+    bc.addToPendingTransactions(newTransaction);
+    const requestPromises = [];
+    bc.networkNodes.forEach(networkNodeUrl => {
+        const requestOptions = {
+            uri: networkNodeUrl + "/transaction",
+            method: "POST",
+            body: newTransaction,
+            json: true
+        };
+        requestPromises.push(rp(requestOptions));
+    });
+
+    Promise.all(requestPromises)
+        .then(data => {
+            return res.send('Transaction created and broadcasted successfully');
+        })
+
 
 // To add a new block to the blockchain
 app.post("/mine", (req, res) => {
@@ -38,8 +58,59 @@ app.post("/mine", (req, res) => {
     bc.createNewTransaction(12.5, "00", nodeAddress);
     
     const newBlock = bc.createNewBlock(nonce, previousBlockHash, blockHash);
-    
-    return res.send(`Block ${newBlock["index"]} has been mined!`);
+
+    bc.networkNodes.forEach(networkNodeUrl => {
+        const requestOptions = {
+            uri: networkNodeUrl + "/receive-new-block",
+            method: "POST",
+            body: { newBlock: newBlock },
+            json: true
+        };
+        rp(requestOptions);
+    });
+
+    Promise.all(requestPromises)
+        .then(data => {
+            const requestOptions = {
+                uri: bc.currentNodeUrl + "/transaction/broadcast",
+                method: "POST",
+                body: {
+                    amount: 12.5,
+                    sender: "00",
+                    recipient: nodeAddress
+                },
+                json: true
+            };
+            
+            return rp(requestOptions);
+        })
+        .then(data => {
+            return res.json({
+                note: "New block mined & broadcast successfully",
+                block: newBlock
+            });
+        });
+});
+
+app.post("/receive-new-block", (req, res) => {
+    const { newBlock } = req.body;
+    const lastBlock = bc.getLastBlock();
+    const correctHash = lastBlock.hash === newBlock.previousBlockHash;
+    const correctIndex = lastBlock["index"] + 1 === newBlock["index"];
+
+    if (correctHash && correctIndex) {
+        bc.chain.push(newBlock);
+        bc.pendingTransactions = [];
+        return res.json({
+            note: "New block received and accepted.",
+            newBlock: newBlock
+        });
+    } else {
+        res.json({
+            note: "New block rejected.",
+            newBlock: newBlock
+        });
+    }
 });
 
 // register a node and broadcast it to the network
@@ -95,6 +166,4 @@ app.post("/node/register-bulk", (req, res) => {
     return res.json({ note: "Bulk registration successful." });
 });
 
-app.listen(PORT, () => {
-    console.log(`Listening on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
